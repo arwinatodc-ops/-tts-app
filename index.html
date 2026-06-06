@@ -1,10 +1,14 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Ultimate TTS Pro V2</title>
-<link rel="manifest" href
+
+<!-- ✅ FIXED MANIFEST -->
+manifest.json
+
 <style>
 body{font-family:Arial,sans-serif;background:#121212;color:#fff;margin:0}
 body.light{background:#f5f5f5;color:#111}
@@ -23,7 +27,7 @@ button{cursor:pointer}
 .statgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
 </style>
 </head>
- 
+
 <body>
 <div class="container">
 <h2>🎧 Ultimate TTS Pro V2</h2>
@@ -121,13 +125,9 @@ function speakChunk(){
  u.voice=voices[voice.value];
  u.rate=parseFloat(rate.value);
 
- u.onboundary=(e)=>{
-   if(e.name==='word' || e.charIndex>=0){}
- };
-
  u.onend=()=>{
    wordsRead += chunks[currentChunk].trim().split(/\s+/).length;
-   wordsReadEl();
+   document.getElementById('wordsRead').textContent=wordsRead;
    currentChunk++;
    localStorage.setItem('tts_position',currentChunk);
 
@@ -139,10 +139,6 @@ function speakChunk(){
  };
 
  speechSynthesis.speak(u);
-}
-
-function wordsReadEl(){
- document.getElementById('wordsRead').textContent=wordsRead;
 }
 
 function highlight(i){
@@ -224,13 +220,14 @@ function deleteEntry(i){
 }
 
 renderLibrary();
+</script>
 
- 
+<!-- ✅ SERVICE WORKER -->
+<script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("service-worker.js");
 }
-
 </script>
- 
+
 </body>
 </html>
