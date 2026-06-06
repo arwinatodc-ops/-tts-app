@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ultimate TTS Pro V2</title>
+<style>
+body{font-family:Arial,sans-serif;background:#121212;color:#fff;margin:0}
+body.light{background:#f5f5f5;color:#111}
+.container{max-width:1200px;margin:auto;padding:20px}
+.card{background:#1e1e1e;padding:15px;border-radius:12px;margin:12px 0}
+body.light .card{background:#fff}
+#textDisplay{height:350px;overflow:auto;background:#000;color:#fff;padding:12px;border-radius:8px;line-height:1.8}
+body.light #textDisplay{background:#fafafa;color:#111}
+button,input,select{padding:10px;border-radius:8px;border:none;margin:4px}
+button{cursor:pointer}
+.word.active{background:yellow;color:black}
+.word.searchhit{outline:1px solid orange}
+.progress{height:8px;background:#444;border-radius:10px}
+.bar{height:8px;width:0;background:#4caf50;border-radius:10px}
+.toolbar{display:flex;flex-wrap:wrap;gap:6px}
+.statgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+</style>
+</head>
+<body>
+<div class="container">
+<h2>🎧 Ultimate TTS Pro V2</h2>
+
+<div class="card">
+<div class="toolbar">
+<input type="file" id="txtFile" accept=".txt">
+<select id="voice"></select>
+<label>Rate <input type="range" id="rate" min="0.5" max="3" step="0.1" value="1"></label>
+<button onclick="startReading()">▶ Start</button>
+<button onclick="speechSynthesis.pause()">⏸ Pause</button>
+<button onclick="speechSynthesis.resume()">▶ Resume</button>
+<button onclick="stopReading()">⛔ Stop</button>
+<button onclick="toggleTheme()">🌙/☀</button>
+</div>
+
+<div id="textDisplay" contenteditable="true">Paste text here...</div>
+
+<div class="progress"><div class="bar" id="bar"></div></div>
+
+<div class="statgrid">
+<div>Words: <span id="wordCount">0</span></div>
+<div>Read: <span id="wordsRead">0</span></div>
+<div>ETA: <span id="eta">0 sec</span></div>
+<div>Progress: <span id="pct">0%</span></div>
+</div>
+</div>
+
+<div class="card">
+<input id="search" placeholder="Search..." oninput="searchText()">
+<button onclick="saveLibrary()">Save Library Entry</button>
+<div id="library"></div>
+</div>
+</div>
+
+<script>
+let voices=[], chunks=[], currentChunk=0, wordsRead=0;
+
+function loadVoices(){
+ voices=speechSynthesis.getVoices();
+ let s=document.getElementById('voice');
+ s.innerHTML='';
+ voices.forEach((v,i)=>{
+  let o=document.createElement('option');
+  o.value=i;o.textContent=v.name+' ('+v.lang+')';
+  s.appendChild(o);
+ });
+}
+loadVoices();
+speechSynthesis.onvoiceschanged=loadVoices;
+
+function splitText(t){
+ return t.match(/[^.!?]+[.!?]*/g)?.filter(x=>x.trim())||[];
+}
+
+function prepare(){
+ let raw=document.getElementById('textDisplay').innerText;
+ chunks=splitText(raw);
+
+ let box=document.getElementById('textDisplay');
+ box.innerHTML='';
+
+ let totalWords=0;
+ chunks.forEach((c,i)=>{
+   let span=document.createElement('span');
+   span.id='c'+i;
+   span.className='chunk';
+   span.textContent=c+' ';
+   box.appendChild(span);
+   totalWords+=c.trim().split(/\s+/).length;
+ });
+
+ document.getElementById('wordCount').textContent=totalWords;
+ let eta=Math.ceil((totalWords/(180*parseFloat(rate.value)))*60);
+ document.getElementById('eta').textContent=eta+' sec';
+}
+
+function startReading(){
+ prepare();
+ currentChunk=parseInt(localStorage.getItem('tts_position')||0);
+ speakChunk();
+}
+
+function speakChunk(){
+ if(currentChunk>=chunks.length){
+   bar.style.width='100%';
+   pct.textContent='100%';
+   localStorage.removeItem('tts_position');
+   return;
+ }
+
+ highlight(currentChunk);
+
+ let u=new SpeechSynthesisUtterance(chunks[currentChunk]);
+ u.voice=voices[voice.value];
+ u.rate=parseFloat(rate.value);
+
+ u.onboundary=(e)=>{
+   if(e.name==='word' || e.charIndex>=0){}
+ };
+
+ u.onend=()=>{
+   wordsRead += chunks[currentChunk].trim().split(/\s+/).length;
+   wordsReadEl();
+   currentChunk++;
+   localStorage.setItem('tts_position',currentChunk);
+
+   let p=(currentChunk/chunks.length)*100;
+   bar.style.width=p+'%';
+   pct.textContent=Math.round(p)+'%';
+
+   speakChunk();
+ };
+
+ speechSynthesis.speak(u);
+}
+
+function wordsReadEl(){
+ document.getElementById('wordsRead').textContent=wordsRead;
+}
+
+function highlight(i){
+ document.querySelectorAll('.active').forEach(x=>x.classList.remove('active'));
+ let el=document.getElementById('c'+i);
+ if(el){
+   el.classList.add('active');
+   el.scrollIntoView({block:'center',behavior:'smooth'});
+ }
+}
+
+function stopReading(){
+ speechSynthesis.cancel();
+ currentChunk=0;
+ wordsRead=0;
+ localStorage.removeItem('tts_position');
+ bar.style.width='0%';
+ pct.textContent='0%';
+}
+
+function toggleTheme(){
+ document.body.classList.toggle('light');
+ localStorage.setItem('theme',
+ document.body.classList.contains('light')?'light':'dark');
+}
+
+if(localStorage.getItem('theme')==='light')
+ document.body.classList.add('light');
+
+txtFile.addEventListener('change',e=>{
+ let f=e.target.files[0];
+ if(!f)return;
+ let r=new FileReader();
+ r.onload=x=>textDisplay.innerText=x.target.result;
+ r.readAsText(f);
+});
+
+function searchText(){
+ let q=search.value.toLowerCase();
+ document.querySelectorAll('.chunk').forEach(el=>{
+   el.classList.remove('searchhit');
+   if(q && el.textContent.toLowerCase().includes(q))
+      el.classList.add('searchhit');
+ });
+}
+
+function saveLibrary(){
+ let txt=textDisplay.innerText.trim();
+ if(!txt)return;
+
+ let lib=JSON.parse(localStorage.getItem('tts_library')||'[]');
+ lib.push(txt);
+ localStorage.setItem('tts_library',JSON.stringify(lib));
+ renderLibrary();
+}
+
+function renderLibrary(){
+ let lib=JSON.parse(localStorage.getItem('tts_library')||'[]');
+ let out='';
+ lib.forEach((t,i)=>{
+   out += `<div>
+   <button onclick="loadEntry(${i})">Open ${i+1}</button>
+   <button onclick="deleteEntry(${i})">Delete</button>
+   </div>`;
+ });
+ library.innerHTML=out;
+}
+
+function loadEntry(i){
+ let lib=JSON.parse(localStorage.getItem('tts_library')||'[]');
+ textDisplay.innerText=lib[i];
+}
+
+function deleteEntry(i){
+ let lib=JSON.parse(localStorage.getItem('tts_library')||'[]');
+ lib.splice(i,1);
+ localStorage.setItem('tts_library',JSON.stringify(lib));
+ renderLibrary();
+}
+
+renderLibrary();
+</script>
+</body>
+</html>
